@@ -44,16 +44,15 @@ def get_system_metrics():
 
 def download_video_from_drive(file_id, destination_path):
     """
-    Download video dari Google Drive menggunakan API
+    Download video dari Google Drive menggunakan API key
     """
     try:
-        # Inisialisasi layanan Drive
-        credentials = service_account.Credentials.from_service_account_file(
-            'credentials.json',
-            scopes=['https://www.googleapis.com/auth/drive.readonly']
-        )
-        
-        service = build('drive', 'v3', credentials=credentials)
+        # Inisialisasi layanan Drive dengan API key
+        api_key = os.getenv('GOOGLE_DRIVE_API_KEY')
+        if not api_key:
+            raise ValueError("API key Google Drive tidak ditemukan")
+            
+        service = build('drive', 'v3', developerKey=api_key)
         
         # Membuat request untuk mengambil file
         request = service.files().get_media(fileId=file_id)
@@ -76,7 +75,7 @@ def download_video_from_drive(file_id, destination_path):
 
 def start_stream(video_path, stream_url):
     """
-    Memulai streaming menggunakan ffmpeg tanpa encoding
+    Memulai streaming menggunakan ffmpeg tanpa encoding dan tanpa looping
     """
     global ffmpeg_process
     
@@ -85,14 +84,15 @@ def start_stream(video_path, stream_url):
             logger.warning("Streaming sudah berjalan")
             return False, "Streaming sudah berjalan"
         
-        # Perintah ffmpeg untuk streaming tanpa encoding
+        # Perintah ffmpeg untuk streaming tanpa encoding dan tanpa looping
         command = [
             'ffmpeg',
-            '-re',  # Membaca input pada kecepatan native
+            '-re',          # Membaca input pada kecepatan native
             '-i', video_path,  # File input
-            '-c', 'copy',  # Tanpa encoding ulang
-            '-f', 'flv',  # Format output
-            stream_url  # URL streaming tujuan
+            '-c', 'copy',   # Tanpa encoding ulang (copy codec)
+            '-movflags', 'faststart',  # Optimasi untuk streaming
+            '-f', 'flv',    # Format output untuk streaming
+            stream_url      # URL streaming tujuan (Facebook/YouTube)
         ]
         
         # Memulai proses ffmpeg
