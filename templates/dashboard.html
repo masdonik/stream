@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Streaming Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans">
+    <!-- Header -->
+    <header class="bg-gray-800 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    {% if user.profile_photo %}
+                    <img src="{{ url_for('static', filename='uploads/' + user.profile_photo) }}" 
+                         alt="Profile" 
+                         class="w-10 h-10 rounded-full object-cover border-2 border-blue-500">
+                    {% else %}
+                    <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center">
+                        <i class="fas fa-user text-white"></i>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <h2 class="text-xl font-semibold text-white">{{ user.username }}</h2>
+                        <p class="text-sm text-gray-400">{{ user.email }}</p>
+                    </div>
+                </div>
+
+                <!-- System Metrics -->
+                <div class="flex space-x-6">
+                    <div class="text-center">
+                        <p class="text-sm text-gray-400">CPU</p>
+                        <p class="text-lg font-semibold" id="cpu-usage">{{ metrics.cpu }}%</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-sm text-gray-400">Memory</p>
+                        <p class="text-lg font-semibold" id="memory-usage">{{ metrics.memory.percent }}%</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-sm text-gray-400">Disk</p>
+                        <p class="text-lg font-semibold" id="disk-usage">{{ metrics.disk.percent }}%</p>
+                    </div>
+                    <a href="{{ url_for('logout') }}" class="ml-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Download Video Section -->
+        <section class="bg-gray-800 rounded-lg p-6 mb-8">
+            <h3 class="text-xl font-semibold mb-4">Download Video dari Google Drive</h3>
+            <form id="download-form" class="flex gap-4">
+                <input type="text" id="file-id" placeholder="Masukkan File ID Google Drive" 
+                       class="flex-1 px-4 py-2 rounded-md bg-gray-700 border border-gray-600 focus:outline-none focus:border-blue-500">
+                <button type="submit" class="px-6 py-2 bg-blue-600 rounded-md hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-download mr-2"></i>Download
+                </button>
+            </form>
+        </section>
+
+        <!-- Streaming Section -->
+        <section class="bg-gray-800 rounded-lg p-6 mb-8">
+            <h3 class="text-xl font-semibold mb-4">Live Streaming</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-700">
+                    <thead>
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Nama Video</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Platform</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Waktu Streaming</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-700" id="streaming-table">
+                        {% for video in videos %}
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap">{{ video.name }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if video.is_streaming %}
+                                    {{ video.stream_platform }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if video.stream_start_time %}
+                                    {{ video.stream_start_time.strftime('%Y-%m-%d %H:%M:%S') }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if video.is_streaming %}
+                                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-500/20 text-green-400">
+                                        Live
+                                    </span>
+                                {% else %}
+                                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-500/20 text-gray-400">
+                                        Offline
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if not video.is_streaming %}
+                                <div class="flex space-x-2">
+                                    <button onclick="startStream('{{ video.id }}', 'facebook')" 
+                                            class="px-3 py-1 bg-blue-600 rounded hover:bg-blue-700 transition-colors">
+                                        <i class="fab fa-facebook mr-1"></i>Start FB
+                                    </button>
+                                    <button onclick="startStream('{{ video.id }}', 'youtube')" 
+                                            class="px-3 py-1 bg-red-600 rounded hover:bg-red-700 transition-colors">
+                                        <i class="fab fa-youtube mr-1"></i>Start YT
+                                    </button>
+                                </div>
+                                {% else %}
+                                <button onclick="stopStream('{{ video.id }}')" 
+                                        class="px-3 py-1 bg-red-600 rounded hover:bg-red-700 transition-colors">
+                                    <i class="fas fa-stop mr-1"></i>Stop
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Video List Section -->
+        <section class="bg-gray-800 rounded-lg p-6">
+            <h3 class="text-xl font-semibold mb-4">Daftar Video</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-700">
+                    <thead>
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Nama Video</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Ukuran</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Tanggal Download</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-700" id="video-table">
+                        {% for video in videos %}
+                        <tr id="video-row-{{ video.id }}">
+                            <td class="px-6 py-4 whitespace-nowrap">{{ video.name }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">{{ video.get_size_display() }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">{{ video.download_date.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex space-x-2">
+                                    <button onclick="showRenameModal('{{ video.id }}', '{{ video.name }}')" 
+                                            class="px-3 py-1 bg-yellow-600 rounded hover:bg-yellow-700 transition-colors">
+                                        <i class="fas fa-edit mr-1"></i>Rename
+                                    </button>
+                                    <button onclick="deleteVideo('{{ video.id }}')" 
+                                            class="px-3 py-1 bg-red-600 rounded hover:bg-red-700 transition-colors">
+                                        <i class="fas fa-trash mr-1"></i>Delete
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- Rename Modal -->
+    <div id="rename-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-gray-800 p-6 rounded-lg w-96">
+            <h3 class="text-lg font-semibold mb-4">Rename Video</h3>
+            <input type="text" id="new-name" class="w-full px-4 py-2 rounded-md bg-gray-700 border border-gray-600 focus:outline-none focus:border-blue-500 mb-4">
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeRenameModal()" class="px-4 py-2 bg-gray-600 rounded hover:bg-gray-700 transition-colors">
+                    Batal
+                </button>
+                <button onclick="renameVideo()" class="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 transition-colors">
+                    Simpan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentVideoId = null;
+
+        // Update metrics setiap 5 detik
+        setInterval(async () => {
+            try {
+                const response = await fetch('/get_metrics');
+                const metrics = await response.json();
+                
+                document.getElementById('cpu-usage').textContent = `${metrics.cpu}%`;
+                document.getElementById('memory-usage').textContent = `${metrics.memory.percent}%`;
+                document.getElementById('disk-usage').textContent = `${metrics.disk.percent}%`;
+            } catch (error) {
+                console.error('Error updating metrics:', error);
+            }
+        }, 5000);
+
+        // Download video
+        document.getElementById('download-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileId = document.getElementById('file-id').value;
+            
+            try {
+                const response = await fetch('/download_video', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `file_id=${fileId}`
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    location.reload();
+                } else {
+                    alert(result.error);
+                }
+            } catch (error) {
+                console.error('Error downloading video:', error);
+                alert('Gagal mengunduh video');
+            }
+        });
+
+        // Start streaming
+        async function startStream(videoId, platform) {
+            try {
+                const response = await fetch('/start_stream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `video_id=${videoId}&platform=${platform}`
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    location.reload();
+                } else {
+                    alert(result.error);
+                }
+            } catch (error) {
+                console.error('Error starting stream:', error);
+                alert('Gagal memulai streaming');
+            }
+        }
+
+        // Stop streaming
+        async function stopStream(videoId) {
+            try {
+                const response = await fetch('/stop_stream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `video_id=${videoId}`
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    location.reload();
+                } else {
+                    alert(result.error);
+                }
+            } catch (error) {
+                console.error('Error stopping stream:', error);
+                alert('Gagal menghentikan streaming');
+            }
+        }
+
+        // Show rename modal
+        function showRenameModal(videoId, currentName) {
+            currentVideoId = videoId;
+            document.getElementById('new-name').value = currentName;
+            document.getElementById('rename-modal').classList.remove('hidden');
+        }
+
+        // Close rename modal
+        function closeRenameModal() {
+            document.getElementById('rename-modal').classList.add('hidden');
+            currentVideoId = null;
+        }
+
+        // Rename video
+        async function renameVideo() {
+            const newName = document.getElementById('new-name').value;
+            
+            try {
+                const response = await fetch('/rename_video', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `video_id=${currentVideoId}&new_name=${newName}`
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    location.reload();
+                } else {
+                    alert(result.error);
+                }
+            } catch (error) {
+                console.error('Error renaming video:', error);
+                alert('Gagal mengubah nama video');
+            }
+            
+            closeRenameModal();
+        }
+
+        // Delete video
+        async function deleteVideo(videoId) {
+            if (!confirm('Apakah Anda yakin ingin menghapus video ini?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/delete_video', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `video_id=${videoId}`
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById(`video-row-${videoId}`).remove();
+                } else {
+                    alert(result.error);
+                }
+            } catch (error) {
+                console.error('Error deleting video:', error);
+                alert('Gagal menghapus video');
+            }
+        }
+    </script>
+</body>
+</html>
